@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\UserRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -33,6 +35,24 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\Column(length: 255)]
     private ?string $name = null;
+
+    /**
+     * @var Collection<int, TodoList>
+     */
+    #[ORM\OneToMany(targetEntity: TodoList::class, mappedBy: 'owner', orphanRemoval: true)]
+    private Collection $ownedLists;
+
+    /**
+     * @var Collection<int, TodoList>
+     */
+    #[ORM\ManyToMany(targetEntity: TodoList::class, mappedBy: 'sharedWith')]
+    private Collection $sharedLists;
+
+    public function __construct()
+    {
+        $this->ownedLists = new ArrayCollection();
+        $this->sharedLists = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -105,7 +125,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     {
         $data = (array) $this;
         $data["\0" . self::class . "\0password"] = hash('crc32c', $this->password);
-        
+
         return $data;
     }
 
@@ -123,6 +143,63 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setName(string $name): static
     {
         $this->name = $name;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, TodoList>
+     */
+    public function getOwnedLists(): Collection
+    {
+        return $this->ownedLists;
+    }
+
+    public function addOwnedList(TodoList $ownedList): static
+    {
+        if (!$this->ownedLists->contains($ownedList)) {
+            $this->ownedLists->add($ownedList);
+            $ownedList->setOwner($this);
+        }
+
+        return $this;
+    }
+
+    public function removeOwnedList(TodoList $ownedList): static
+    {
+        if ($this->ownedLists->removeElement($ownedList)) {
+            // set the owning side to null (unless already changed)
+            if ($ownedList->getOwner() === $this) {
+                $ownedList->setOwner(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, TodoList>
+     */
+    public function getSharedLists(): Collection
+    {
+        return $this->sharedLists;
+    }
+
+    public function addSharedList(TodoList $sharedList): static
+    {
+        if (!$this->sharedLists->contains($sharedList)) {
+            $this->sharedLists->add($sharedList);
+            $sharedList->addSharedWith($this);
+        }
+
+        return $this;
+    }
+
+    public function removeSharedList(TodoList $sharedList): static
+    {
+        if ($this->sharedLists->removeElement($sharedList)) {
+            $sharedList->removeSharedWith($this);
+        }
 
         return $this;
     }
